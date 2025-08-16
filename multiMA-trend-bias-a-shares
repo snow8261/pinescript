@@ -1,0 +1,124 @@
+//@version=6
+indicator("A股：5/10 短线 + 20/60 波段（精简标记·稳定版）", overlay=true)
+
+// ===== 参数 =====
+grpLen = "均线参数"
+len5   = input.int(5,  "MA5",  minval=1, group=grpLen)
+len10  = input.int(10, "MA10", minval=1, group=grpLen)
+len20  = input.int(20, "MA20", minval=1, group=grpLen)
+len60  = input.int(60, "MA60", minval=1, group=grpLen)
+
+grpBias = "乖离率(BIAS20)"
+biasLen     = input.int(20,   "BIAS周期（建议20）", minval=1, group=grpBias)
+biasHotWarn = input.float(8.0,"正乖离过热阈值(%)", step=0.1,  group=grpBias)
+biasColdWarn= input.float(-8.0,"负乖离超跌阈值(%)", step=0.1,  group=grpBias)
+showBiasTag = input.bool(true,"在主图标出过热/超跌图标（无文字）", group=grpBias)
+
+grpVis = "可视化"
+showBG     = input.bool(true,  "背景标注波段环境（20/60）", group=grpVis)
+showLabels = input.bool(true,  "显示买卖图标（无文字）",      group=grpVis)
+tinyMarks  = input.bool(true,  "小图标模式（不挡K线）",        group=grpVis)
+markAlpha  = input.int(0,      "图标透明度(0清晰-95很淡)", minval=0, maxval=95, group=grpVis)
+maWidth    = input.int(2,      "均线粗细(1-4)", minval=1, maxval=4, group=grpVis)
+showTable  = input.bool(true,  "右上角显示均线/状态",         group=grpVis)
+
+// ===== 均线 =====
+ma5  = ta.sma(close, len5)
+ma10 = ta.sma(close, len10)
+ma20 = ta.sma(close, len20)
+ma60 = ta.sma(close, len60)
+
+plot(ma5,  title="MA5",  color=color.new(color.orange, 0), linewidth=maWidth)
+plot(ma10, title="MA10", color=color.new(color.teal,   0), linewidth=maWidth)
+plot(ma20, title="MA20", color=color.new(color.blue,   0), linewidth=maWidth)
+plot(ma60, title="MA60", color=color.new(color.red,    0), linewidth=maWidth)
+
+// ===== 波段环境（20/60）=====
+ma20Up  = ma20 >= ma20[1]
+bullEnv = (ma20 >= ma60) and ma20Up
+bearEnv = (ma20 <  ma60) and not ma20Up
+sideEnv = not bullEnv and not bearEnv
+
+bgcolor(showBG and bullEnv ? color.new(color.lime, 88) : na)
+bgcolor(showBG and bearEnv ? color.new(color.red,  88) : na)
+bgcolor(showBG and sideEnv ? color.new(color.gray,92) : na)
+
+// ===== 短线节奏（5/10）=====
+shortGC = ta.crossover(ma5, ma10)
+shortDC = ta.crossunder(ma5, ma10)
+
+longAdd      = bullEnv and shortGC and close >= ma20
+longExit     = bullEnv and shortDC and close <  ma20
+reboundSell  = bearEnv and shortDC and close <= ma20
+choppyEntry  = sideEnv and shortGC and close >= ma20
+choppyExit   = sideEnv and shortDC and close <  ma20
+
+// 回踩站回 MA20（仅在多头环境下提示）
+wasBelow20    = close[1] < ma20[1] or low[1] < ma20[1]
+reclaimMA20   = ta.crossover(close, ma20) and wasBelow20
+reclaimSignal = bullEnv and reclaimMA20
+
+// ===== BIAS20 =====
+maBias   = ta.sma(close, biasLen)
+bias20   = (close - maBias) / maBias * 100.0
+hotAlert = bias20 >= biasHotWarn
+coldAlert= bias20 <= biasColdWarn
+
+// ===== 主图图标（无文字，使用双写保证 size 为常量）=====
+// 顺势加仓
+plotshape(showLabels and tinyMarks and longAdd,   title="顺势加仓_tiny",  style=shape.triangleup,   location=location.belowbar, size=size.tiny,  color=color.new(color.lime,  markAlpha))
+plotshape(showLabels and not tinyMarks and longAdd, title="顺势加仓_small", style=shape.triangleup,   location=location.belowbar, size=size.small, color=color.new(color.lime,  markAlpha))
+// 防守退出
+plotshape(showLabels and tinyMarks and longExit,   title="防守退出_tiny",  style=shape.triangledown, location=location.abovebar, size=size.tiny,  color=color.new(color.red,   markAlpha))
+plotshape(showLabels and not tinyMarks and longExit, title="防守退出_small", style=shape.triangledown, location=location.abovebar, size=size.small, color=color.new(color.red,   markAlpha))
+// 反弹卖点
+plotshape(showLabels and tinyMarks and reboundSell,   title="反弹卖点_tiny",  style=shape.triangledown, location=location.abovebar, size=size.tiny,  color=color.new(color.maroon,markAlpha))
+plotshape(showLabels and not tinyMarks and reboundSell, title="反弹卖点_small", style=shape.triangledown, location=location.abovebar, size=size.small, color=color.new(color.maroon,markAlpha))
+// 震荡轻仓
+plotshape(showLabels and tinyMarks and choppyEntry,   title="震荡轻仓_tiny",  style=shape.circle,       location=location.belowbar, size=size.tiny,  color=color.new(color.orange,markAlpha))
+plotshape(showLabels and not tinyMarks and choppyEntry, title="震荡轻仓_small", style=shape.circle,       location=location.belowbar, size=size.small, color=color.new(color.orange,markAlpha))
+// 震荡离场
+plotshape(showLabels and tinyMarks and choppyExit,   title="震荡离场_tiny",  style=shape.circle,       location=location.abovebar, size=size.tiny,  color=color.new(color.gray,  markAlpha))
+plotshape(showLabels and not tinyMarks and choppyExit, title="震荡离场_small", style=shape.circle,       location=location.abovebar, size=size.small, color=color.new(color.gray,  markAlpha))
+// 回踩站回 MA20
+plotshape(showLabels and tinyMarks and reclaimSignal,   title="回踩站回MA20_tiny",  style=shape.labelup, location=location.belowbar, size=size.tiny,  color=color.new(color.green, markAlpha))
+plotshape(showLabels and not tinyMarks and reclaimSignal, title="回踩站回MA20_small", style=shape.labelup, location=location.belowbar, size=size.small, color=color.new(color.green, markAlpha))
+// BIAS20 过热 / 超跌
+plotshape(showBiasTag and tinyMarks and hotAlert,   title="BIAS20过热_tiny",  style=shape.xcross, location=location.abovebar, size=size.tiny,  color=color.new(color.red,  markAlpha))
+plotshape(showBiasTag and not tinyMarks and hotAlert, title="BIAS20过热_small", style=shape.xcross, location=location.abovebar, size=size.small, color=color.new(color.red,  markAlpha))
+plotshape(showBiasTag and tinyMarks and coldAlert,  title="BIAS20超跌_tiny",  style=shape.xcross, location=location.belowbar, size=size.tiny,  color=color.new(color.blue, markAlpha))
+plotshape(showBiasTag and not tinyMarks and coldAlert, title="BIAS20超跌_small", style=shape.xcross, location=location.belowbar, size=size.small, color=color.new(color.blue, markAlpha))
+
+// ===== 提醒（Alerts）=====
+alertcondition(longAdd,        "顺势加仓（牛市区）",  "5上穿10 & 收盘在MA20上方 & 波段多头")
+alertcondition(longExit,       "防守退出（牛市区）",  "5下穿10 & 收盘跌破MA20 & 波段多头")
+alertcondition(reboundSell,    "反弹卖点（熊市区）",  "5下穿10 & 收盘≤MA20 & 波段空头")
+alertcondition(choppyEntry,    "震荡轻仓（震荡区）",  "5上穿10 & 收盘≥MA20 & 震荡环境")
+alertcondition(choppyExit,     "震荡离场（震荡区）",  "5下穿10 & 收盘<MA20  & 震荡环境")
+alertcondition(reclaimSignal,  "回踩并站回MA20",      "收盘重新站回MA20（波段多头环境）")
+alertcondition(hotAlert,       "BIAS20过热",          "BIAS20 ≥ 设定阈值，考虑落袋/减仓")
+alertcondition(coldAlert,      "BIAS20超跌",          "BIAS20 ≤ 设定阈值，关注反弹/低吸")
+
+// ===== 右上角信息表 =====
+var table t = table.new(position.top_right, 2, 7, border_width=1)
+if barstate.isfirst and showTable
+    table.cell(t, 0, 0, "项",  bgcolor=color.black, text_color=color.white)
+    table.cell(t, 1, 0, "值",  bgcolor=color.black, text_color=color.white)
+
+if showTable and barstate.islast
+    env = bullEnv ? "波段多头(20≥60↑)" : bearEnv ? "波段空头(20<60↓)" : "震荡"
+    table.cell(t, 0, 1, "环境")
+    table.cell(t, 1, 1, env)
+    table.cell(t, 0, 2, "MA20 / MA60")
+    table.cell(t, 1, 2, str.tostring(ma20, format.mintick) + " / " + str.tostring(ma60, format.mintick))
+    table.cell(t, 0, 3, "MA5 / MA10")
+    table.cell(t, 1, 3, str.tostring(ma5,  format.mintick) + " / " + str.tostring(ma10,  format.mintick))
+    table.cell(t, 0, 4, "收盘价")
+    table.cell(t, 1, 4, str.tostring(close, format.mintick))
+    table.cell(t, 0, 5, "BIAS20(%)")
+    table.cell(t, 1, 5, str.tostring(bias20, format.mintick))
+    tip = reclaimSignal ? "↗回踩站回20" : hotAlert ? "BIAS过热" : coldAlert ? "BIAS超跌" :
+          longAdd ? "顺势加仓" : longExit ? "防守退出" : reboundSell ? "反弹卖点" :
+          choppyEntry ? "震荡轻仓" : choppyExit ? "震荡离场" : "-"
+    table.cell(t, 0, 6, "提示")
+    table.cell(t, 1, 6, tip)
