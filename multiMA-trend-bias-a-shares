@@ -107,7 +107,7 @@ alertcondition(longAdd and volume <= vol_ma5, "假突破警告", "顺势加仓�
 alertcondition(reclaimSignal and volume >= vol_ma5, "回踩放量警告", "回踩站回MA20，但成交量放大，可能是假反弹")
 
 // ===== 右上角信息表 =====
-var table t = table.new(position.top_right, 2, 7, border_width=1)
+var table t = table.new(position.top_right, 2, 8, border_width=1)
 if barstate.isfirst and showTable
     table.cell(t, 0, 0, "项",  bgcolor=color.black, text_color=color.white)
     table.cell(t, 1, 0, "值",  bgcolor=color.black, text_color=color.white)
