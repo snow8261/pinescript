@@ -8,6 +8,10 @@ len10  = input.int(10, "MA10", minval=1, group=grpLen)
 len20  = input.int(20, "MA20", minval=1, group=grpLen)
 len60  = input.int(60, "MA60", minval=1, group=grpLen)
 
+// ===== 成交量均线 =====
+vol_ma5 = ta.sma(volume, 5)
+volState = volume > vol_ma5 ? "放量" : volume < vol_ma5 ? "缩量" : "正常"
+
 grpBias = "乖离率(BIAS20)"
 biasLen     = input.int(20,   "BIAS周期（建议20）", minval=1, group=grpBias)
 biasHotWarn = input.float(8.0,"正乖离过热阈值(%)", step=0.1,  group=grpBias)
@@ -47,7 +51,7 @@ bgcolor(showBG and sideEnv ? color.new(color.gray,92) : na)
 shortGC = ta.crossover(ma5, ma10)
 shortDC = ta.crossunder(ma5, ma10)
 
-longAdd      = bullEnv and shortGC and close >= ma20
+longAdd      = bullEnv and shortGC and close >= ma20 and volume > vol_ma5     // 顺势加仓 = 放量
 longExit     = bullEnv and shortDC and close <  ma20
 reboundSell  = bearEnv and shortDC and close <= ma20
 choppyEntry  = sideEnv and shortGC and close >= ma20
@@ -56,7 +60,7 @@ choppyExit   = sideEnv and shortDC and close <  ma20
 // 回踩站回 MA20（仅在多头环境下提示）
 wasBelow20    = close[1] < ma20[1] or low[1] < ma20[1]
 reclaimMA20   = ta.crossover(close, ma20) and wasBelow20
-reclaimSignal = bullEnv and reclaimMA20
+reclaimSignal = bullEnv and reclaimMA20 and volume < vol_ma5   // 缩量回踩才算健康
 
 // ===== BIAS20 =====
 maBias   = ta.sma(close, biasLen)
@@ -98,6 +102,9 @@ alertcondition(choppyExit,     "震荡离场（震荡区）",  "5下穿10 & 收�
 alertcondition(reclaimSignal,  "回踩并站回MA20",      "收盘重新站回MA20（波段多头环境）")
 alertcondition(hotAlert,       "BIAS20过热",          "BIAS20 ≥ 设定阈值，考虑落袋/减仓")
 alertcondition(coldAlert,      "BIAS20超跌",          "BIAS20 ≤ 设定阈值，关注反弹/低吸")
+// ===== 成交量提醒 =====
+alertcondition(longAdd and volume <= vol_ma5, "假突破警告", "顺势加仓信号出现，但成交量未放大，警惕假突破")
+alertcondition(reclaimSignal and volume >= vol_ma5, "回踩放量警告", "回踩站回MA20，但成交量放大，可能是假反弹")
 
 // ===== 右上角信息表 =====
 var table t = table.new(position.top_right, 2, 7, border_width=1)
@@ -117,8 +124,10 @@ if showTable and barstate.islast
     table.cell(t, 1, 4, str.tostring(close, format.mintick))
     table.cell(t, 0, 5, "BIAS20(%)")
     table.cell(t, 1, 5, str.tostring(bias20, format.mintick))
+    table.cell(t, 0, 6, "成交量")
+    table.cell(t, 1, 6, volState)   
     tip = reclaimSignal ? "↗回踩站回20" : hotAlert ? "BIAS过热" : coldAlert ? "BIAS超跌" :
           longAdd ? "顺势加仓" : longExit ? "防守退出" : reboundSell ? "反弹卖点" :
           choppyEntry ? "震荡轻仓" : choppyExit ? "震荡离场" : "-"
-    table.cell(t, 0, 6, "提示")
-    table.cell(t, 1, 6, tip)
+    table.cell(t, 0, 7, "提示")
+    table.cell(t, 1, 7, tip)
